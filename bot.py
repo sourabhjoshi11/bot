@@ -34,10 +34,7 @@ async def del_pending(user_id: int):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 *Terabox Video Bot*\n\n"
-        "Terabox/Terashare link bhejo — main video direct Telegram pe bhej dunga!\n\n"
-        "📌 Supported:\n"
-        "• terabox.com\n• teraboxapp.com\n• 1024tera.com\n• terashare.com\n\n"
-        "🗜 50MB+ videos auto-compress hokar aayengi!",
+        "Send me your Terabox URLs! I will directly download them to Telegram.",
         parse_mode='Markdown'
     )
 
@@ -49,18 +46,18 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
 
     if not is_terabox_link(url):
-        await update.message.reply_text("❌ Yeh Terabox link nahi hai.")
+        await update.message.reply_text("❌ This is not a valid Terabox link.")
         return
 
     allowed, wait_time = await limiter.is_allowed(user_id)
     if not allowed:
         await update.message.reply_text(
-            f"⏳ Thoda ruko! {wait_time}s baad try karo.\n"
+            f"⏳ Please wait! Try again in {wait_time}s.\n"
             f"Limit: {limiter.MAX_REQUESTS} requests/minute."
         )
         return
 
-    msg = await update.message.reply_text("⏳ Link check ho raha hai...")
+    msg = await update.message.reply_text("⏳ Checking the link...")
 
     cached = await cache.get(url)
     info = cached
@@ -81,12 +78,12 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(f"🗜 {PRESETS[k]['label']}", callback_data=f"compress_{k}")]
         for k in PRESETS
     ]
-    keyboard.append([InlineKeyboardButton("🔗 Sirf Direct Link Do", callback_data="direct_link")])
+    keyboard.append([InlineKeyboardButton("🔗 Get Direct Link", callback_data="direct_link")])
 
     await msg.edit_text(
         f"✅ *{info.get('title', 'Video')}*\n"
         f"⏱ Duration: {info.get('duration', '?')}s\n\n"
-        f"📥 Kaise chahiye video?",
+        f"📥 Choose an option:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
@@ -104,18 +101,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "direct_link":
         url = await get_pending(user_id)
         if not url:
-            await query.edit_message_text("❌ Link expire ho gaya, dobara bhejo.")
+            await query.edit_message_text("❌ Link has expired, please send it again.")
             return
         info = await cache.get(url)
         if info and info.get('direct_url'):
             keyboard = [[InlineKeyboardButton("⬇️ Download", url=info['direct_url'])]]
             await query.edit_message_text(
-                "🔗 *Direct Link Ready!*\n\nNeeche button se download karo:",
+                "🔗 *Direct Link Ready!*\n\nClick the button below to download:",
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode='Markdown'
             )
         else:
-            await query.edit_message_text("❌ Direct link nahi mila.")
+            await query.edit_message_text("❌ Direct link not found.")
         await del_pending(user_id)
         return
 
@@ -125,13 +122,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = await get_pending(user_id)
 
         if not url:
-            await query.edit_message_text("❌ Link expire ho gaya, dobara bhejo.")
+            await query.edit_message_text("❌ Link has expired, please send it again.")
             return
 
         await query.edit_message_text(
-            f"⬇️ Video download ho rahi hai...\n"
-            f"🗜 Phir *{PRESETS[preset_key]['label']}* mein compress hogi.\n\n"
-            f"⏳ Thoda wait karo...",
+            f"⬇️ Downloading the video...\n"
+            f"🗜 Then it will be compressed to *{PRESETS[preset_key]['label']}*.\n\n"
+            f"⏳ Please wait...",
             parse_mode='Markdown'
         )
 
@@ -147,7 +144,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.edit_message_text(
                 chat_id=query.message.chat_id,
                 message_id=query.message.message_id,
-                text=f"✅ Downloaded ({original_size:.1f}MB)\n🗜 Compress ho rahi hai..."
+                text=f"✅ Downloaded ({original_size:.1f}MB)\n🗜 Compressing..."
             )
 
             if is_within_telegram_limit(downloaded):
@@ -155,7 +152,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.edit_message_text(
                     chat_id=query.message.chat_id,
                     message_id=query.message.message_id,
-                    text=f"📤 Video send ho rahi hai ({original_size:.1f}MB)..."
+                    text=f"📤 Sending the video ({original_size:.1f}MB)..."
                 )
                 with open(downloaded, 'rb') as f:
                     await context.bot.send_video(
@@ -179,13 +176,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         chat_id=query.message.chat_id,
                         message_id=query.message.message_id,
                         text=(
-                            f"⚠️ Compress ke baad bhi {compressed_size:.1f}MB hai.\n"
-                            f"Telegram limit 50MB hai.\n\n"
-                            f"👇 Chota quality try karo:"
+                            f"⚠️ Even after compression, the size is {compressed_size:.1f}MB.\n"
+                            f"Telegram size limit is 50MB.\n\n"
+                            f"👇 Try a lower quality:"
                         ),
                         reply_markup=InlineKeyboardMarkup([
                             [InlineKeyboardButton("🗜 360p — Smallest Size", callback_data="compress_low")],
-                            [InlineKeyboardButton("🔗 Direct Link Lo", callback_data="direct_link")],
+                            [InlineKeyboardButton("🔗 Get Direct Link", callback_data="direct_link")],
                         ])
                     )
                     cleanup(compressed)
@@ -195,9 +192,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=query.message.chat_id,
                     message_id=query.message.message_id,
                     text=(
-                        f"✅ Compress complete!\n"
+                        f"✅ Compression complete!\n"
                         f"📦 {original_size:.1f}MB → {compressed_size:.1f}MB\n"
-                        f"📤 Send ho rahi hai..."
+                        f"📤 Sending the video..."
                     )
                 )
                 with open(compressed, 'rb') as f:
@@ -219,7 +216,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.edit_message_text(
                 chat_id=query.message.chat_id,
                 message_id=query.message.message_id,
-                text=f"❌ Error aaya:\n{str(e)[:200]}"
+                text=f"❌ An error occurred:\n{str(e)[:200]}"
             )
         finally:
             cleanup(downloaded, compressed)
