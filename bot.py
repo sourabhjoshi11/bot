@@ -34,9 +34,9 @@ async def del_pending(user_id: int):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 *Terabox Video Bot*\n\n"
-        "Terabox link bhejo — main video direct Telegram pe bhej dunga!\n\n"
+        "Terabox/Terashare link bhejo — main video direct Telegram pe bhej dunga!\n\n"
         "📌 Supported:\n"
-        "• terabox.com\n• teraboxapp.com\n• 1024tera.com\n\n"
+        "• terabox.com\n• teraboxapp.com\n• 1024tera.com\n• terashare.com\n\n"
         "🗜 50MB+ videos auto-compress hokar aayengi!",
         parse_mode='Markdown'
     )
