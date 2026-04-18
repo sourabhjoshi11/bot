@@ -1,5 +1,5 @@
 python-telegram-bot==20.7
-yt-dlp
+requests
 aiohttp
 redis[asyncio]
 python-dotenv

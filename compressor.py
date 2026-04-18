@@ -1,10 +1,11 @@
 import asyncio
 import os
 import uuid
+import requests
 from pathlib import Path
 
 TEMP_DIR = "/tmp/terabox_videos"
-MAX_TELEGRAM_SIZE = 49 * 1024 * 1024  # 49MB (safety margin)
+MAX_TELEGRAM_SIZE = 49 * 1024 * 1024  # 49MB
 
 os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -16,32 +17,37 @@ PRESETS = {
 }
 
 async def download_video(url: str, filename: str) -> str:
-    """yt-dlp se video download karo"""
-    output_path = f"{TEMP_DIR}/{filename}.%(ext)s"
-    cmd = [
-        "yt-dlp",
-        "--quiet",
-        "--no-warnings",
-        "-o", output_path,
-        "--merge-output-format", "mp4",
-        url
-    ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
-    _, stderr = await proc.communicate()
+    """Direct HTTP download (yt_dlp nahi)"""
+    output_path = f"{TEMP_DIR}/{filename}.mp4"
 
-    if proc.returncode != 0:
-        raise Exception(f"Download failed: {stderr.decode()}")
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Referer": "https://www.terabox.com/",
+    }
 
-    # BUG 6 FIX: .part / .ytdl / .tmp files ignore karo
-    for f in Path(TEMP_DIR).glob(f"{filename}.*"):
-        if f.suffix not in ['.part', '.ytdl', '.tmp']:
-            return str(f)
+    def _download():
+        with requests.get(url, headers=headers, stream=True, timeout=60, allow_redirects=True) as r:
+            r.raise_for_status()
+            with open(output_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1024 * 1024):  # 1MB chunks
+                    if chunk:
+                        f.write(chunk)
 
-    raise Exception("Downloaded file not found")
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(None, _download)
+    except Exception as e:
+        raise Exception(f"Download failed: {e}")
+
+    if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+        raise Exception("Download complete nahi hua ya file empty hai.")
+
+    return output_path
+
 
 async def compress_video(input_path: str, preset_key: str = "medium") -> str:
     """FFmpeg se video compress karo"""
@@ -73,6 +79,7 @@ async def compress_video(input_path: str, preset_key: str = "medium") -> str:
 
     return output_path
 
+
 def get_file_size_mb(path: str) -> float:
     return os.path.getsize(path) / (1024 * 1024)
 
@@ -80,7 +87,6 @@ def is_within_telegram_limit(path: str) -> bool:
     return os.path.getsize(path) <= MAX_TELEGRAM_SIZE
 
 def cleanup(*paths):
-    """Temp files delete karo"""
     for path in paths:
         try:
             if path and os.path.exists(path):
